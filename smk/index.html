@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>CBT Anti-Cheat Android & Windows</title>
+  <title>CBT Anti-Cheat - Perbaikan Swipe Android</title>
   <style>
     * {
       box-sizing: border-box;
@@ -100,7 +100,7 @@
     <div style="max-width: 480px;">
       <h2>Mode Ujian Terproteksi</h2>
       <p style="color: #cbd5e1; line-height: 1.6;">
-        Keluar dari layar penuh, berpindah aplikasi, membuka <em>Recent Apps</em>, atau menekan <em>Back</em> di Android akan dihitung sebagai pelanggaran.
+        Setiap 1 kali gangguan (keluar layar penuh, pindah aplikasi, atau gestur <em>swipe</em>) dihitung <strong>1 pelanggaran</strong>. Batas maksimal: <strong>3 pelanggaran</strong>.
       </p>
       <button id="btnStartExam" class="btn btn-primary">Masuk Layar Penuh & Mulai</button>
     </div>
@@ -123,7 +123,7 @@
   <main class="container" id="examContainer">
     <div class="card">
       <h3>Soal 1</h3>
-      <p>Mengapa browser di Android tidak dapat mencegah gestur sistem seperti <em>swipe home</em> atau <em>recent apps</em>?</p>
+      <p>Bagaimana cara mencegah satu gestur <em>swipe</em> di Android memicu beberapa pelanggaran sekaligus?</p>
       <textarea style="width: 100%; height: 110px; padding: 12px; user-select: text; -webkit-user-select: text;" placeholder="Ketik jawaban Anda..."></textarea>
     </div>
   </main>
@@ -131,14 +131,16 @@
   <script>
     const CONFIG = {
       maxStrikes: 3,
-      dedupeWindowMs: 1200 // Mencegah 1 aksi (misal minimize) dihitung 2x oleh blur + visibilitychange
+      dedupeWindowMs: 2000,      // Jeda minimal antar pelanggaran baru (2 detik)
+      resumeGracePeriodMs: 2500  // Masa tenang setelah klik "Kembali ke Layar Penuh" (2.5 detik)
     };
 
     let state = {
       isExamActive: false,
+      isWarningOpen: false,
       strikes: 0,
       lastViolationAt: 0,
-      isAndroid: /Android/i.test(navigator.userAgent),
+      graceUntil: 0,
       isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     };
 
@@ -166,20 +168,24 @@
       if (!state.isExamActive) return;
 
       const now = Date.now();
-      if (now - state.lastViolationAt < CONFIG.dedupeWindowMs) {
-        // Tetap pastikan overlay tampil jika belum tampil
-        if (state.strikes < CONFIG.maxStrikes) {
-          warningOverlay.classList.remove('hidden');
-        }
+
+      // 1. Jika overlay peringatan sudah terbuka atau masih dalam masa tenang setelah resume, abaikan!
+      if (state.isWarningOpen || now < state.graceUntil) {
         return;
       }
-      state.lastViolationAt = now;
 
-      state.strikes++;
+      // 2. Cegah event beruntun (blur + fullscreenchange + visibilitychange) dari 1 swipe dihitung ganda
+      if (now - state.lastViolationAt < CONFIG.dedupeWindowMs) {
+        return;
+      }
+
+      state.lastViolationAt = now;
+      state.strikes += 1;
       headerStrike.textContent = `Pelanggaran: ${state.strikes} / ${CONFIG.maxStrikes}`;
 
       if (state.strikes >= CONFIG.maxStrikes) {
         state.isExamActive = false;
+        state.isWarningOpen = false;
         warningOverlay.classList.add('hidden');
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
@@ -192,6 +198,7 @@
           </div>
         `;
       } else {
+        state.isWarningOpen = true;
         warningReason.textContent = reason;
         strikeCounterText.textContent = `Peringatan ke-${state.strikes} dari ${CONFIG.maxStrikes}.`;
         warningOverlay.classList.remove('hidden');
@@ -199,7 +206,7 @@
     }
 
     function setupListeners() {
-      // 1. Keluar dari Fullscreen (Android & Windows)
+      // 1. Keluar dari Fullscreen
       const onFsChange = () => {
         const activeFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
         if (!activeFs && state.isExamActive && !state.isIOS) {
@@ -209,29 +216,24 @@
       document.addEventListener('fullscreenchange', onFsChange);
       document.addEventListener('webkitfullscreenchange', onFsChange);
 
-      // 2. Pindah tab / minimize / buka aplikasi lain / kunci layar
+      // 2. Pindah tab / minimize / buka aplikasi lain
       document.addEventListener('visibilitychange', () => {
         if (document.hidden && state.isExamActive) {
-          recordViolation("Halaman tidak terlihat (pindah tab, minimize, atau buka aplikasi lain).");
+          recordViolation("Halaman ujian tidak terlihat (pindah tab atau aplikasi lain).");
         }
       });
 
-      // 3. Kehilangan fokus jendela (sering muncul di Android saat buka Recent Apps / switcher)
+      // 3. Kehilangan fokus jendela (hanya jika halaman tidak sedang hidden agar tidak dobel dengan visibilitychange)
       window.addEventListener('blur', () => {
-        if (!state.isExamActive) return;
-        // Pada Android, langsung kunci layar soal agar tidak bisa diintip saat switcher terbuka
-        if (state.isAndroid) {
-          recordViolation("Aplikasi kehilangan fokus di Android (terdeteksi pindah layar/switcher).");
-        } else {
-          setTimeout(() => {
-            if (!document.hasFocus() && state.isExamActive) {
-              recordViolation("Jendela browser kehilangan fokus.");
-            }
-          }, 300);
-        }
+        if (!state.isExamActive || document.hidden) return;
+        setTimeout(() => {
+          if (!document.hasFocus() && !document.hidden && state.isExamActive) {
+            recordViolation("Jendela browser kehilangan fokus.");
+          }
+        }, 250);
       });
 
-      // 4. Tombol / gestur Back di Android & browser
+      // 4. Tombol / gestur Back
       history.pushState({ examLock: true }, '', location.href);
       window.addEventListener('popstate', () => {
         if (!state.isExamActive) return;
@@ -244,10 +246,13 @@
       triggerFullscreen();
       startOverlay.classList.add('hidden');
       state.isExamActive = true;
+      state.graceUntil = Date.now() + 1000;
       setupListeners();
     });
 
     document.getElementById('btnResumeExam').addEventListener('click', () => {
+      state.isWarningOpen = false;
+      state.graceUntil = Date.now() + CONFIG.resumeGracePeriodMs;
       warningOverlay.classList.add('hidden');
       triggerFullscreen();
     });
