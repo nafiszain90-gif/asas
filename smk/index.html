@@ -3,36 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>CBT Anti-Cheat Windows Strict Mode</title>
+  <title>CBT Anti-Cheat Android & Windows</title>
   <style>
     * {
       box-sizing: border-box;
       user-select: none;
       -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
 
     html, body {
       margin: 0;
       padding: 0;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden; /* Mencegah scrollbar muncul di Windows */
+      width: 100%;
+      min-height: 100dvh;
       background-color: #f8fafc;
-      font-family: "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overscroll-behavior: none;
+      touch-action: manipulation;
     }
 
-    /* Pastikan elemen utama memenuhi layar penuh saat fullscreen aktif */
     :fullscreen {
       background-color: #f8fafc;
       width: 100vw;
-      height: 100vh;
+      height: 100dvh;
       overflow-y: auto;
     }
 
     .exam-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
       background: #ffffff;
       border-bottom: 1px solid #e2e8f0;
-      padding: 14px 24px;
+      padding: 14px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -48,13 +52,13 @@
 
     .container {
       max-width: 800px;
-      margin: 30px auto;
-      padding: 0 20px;
+      margin: 24px auto;
+      padding: 0 16px;
     }
 
     .card {
       background: #fff;
-      padding: 28px;
+      padding: 24px;
       border-radius: 12px;
       border: 1px solid #e2e8f0;
     }
@@ -76,13 +80,15 @@
     .hidden { display: none !important; }
 
     .btn {
-      padding: 14px 28px;
+      padding: 14px 24px;
       border: none;
       border-radius: 8px;
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       margin-top: 16px;
+      width: 100%;
+      max-width: 360px;
     }
     .btn-primary { background: #2563eb; color: white; }
     .btn-danger { background: #dc2626; color: white; }
@@ -90,28 +96,25 @@
 </head>
 <body>
 
-  <!-- LAYAR MULAI -->
   <div id="startOverlay" class="overlay">
-    <div style="max-width: 500px;">
-      <h2>Mode Ujian Layar Penuh Wajib</h2>
+    <div style="max-width: 480px;">
+      <h2>Mode Ujian Terproteksi</h2>
       <p style="color: #cbd5e1; line-height: 1.6;">
-        Browser akan dikunci ke mode layar penuh (Fullscreen). Menekan tombol <strong>ESC</strong>, <strong>Alt+Tab</strong>, atau keluar dari layar penuh akan langsung dihitung sebagai pelanggaran.
+        Keluar dari layar penuh, berpindah aplikasi, membuka <em>Recent Apps</em>, atau menekan <em>Back</em> di Android akan dihitung sebagai pelanggaran.
       </p>
-      <button id="btnStartExam" class="btn btn-primary">Masuk Layar Penuh & Mulai Ujian</button>
+      <button id="btnStartExam" class="btn btn-primary">Masuk Layar Penuh & Mulai</button>
     </div>
   </div>
 
-  <!-- LAYAR BLOKIR PELANGGARAN (MUNCUL SAAT ESC DITEKAN) -->
   <div id="warningOverlay" class="overlay hidden">
-    <div style="max-width: 480px; background: #1e293b; padding: 32px; border-radius: 12px; border: 2px solid #dc2626;">
-      <h2 style="color: #f87171; margin-top: 0;">⚠️ Akses Soal Dikunci!</h2>
+    <div style="max-width: 460px; background: #1e293b; padding: 28px; border-radius: 12px; border: 2px solid #dc2626;">
+      <h2 style="color: #f87171; margin-top: 0;">⚠️ Pelanggaran Terdeteksi!</h2>
       <p id="warningReason" style="color: #e2e8f0; line-height: 1.6;"></p>
       <p id="strikeCounterText" style="color: #fbbf24; font-weight: bold; font-size: 1.1rem;"></p>
-      <button id="btnResumeExam" class="btn btn-danger">Kunci Kembali Layar Penuh</button>
+      <button id="btnResumeExam" class="btn btn-danger">Kembali ke Layar Penuh</button>
     </div>
   </div>
 
-  <!-- KONTEN UJIAN -->
   <header class="exam-header">
     <strong>Ujian CBT Terproteksi</strong>
     <span class="badge-strike" id="headerStrike">Pelanggaran: 0 / 3</span>
@@ -120,19 +123,22 @@
   <main class="container" id="examContainer">
     <div class="card">
       <h3>Soal 1</h3>
-      <p>Jelaskan fungsi utama dari Keyboard Lock API pada browser berbasis Chromium di sistem operasi Windows!</p>
-      <textarea style="width: 100%; height: 120px; padding: 12px; user-select: text; -webkit-user-select: text;" placeholder="Ketik jawaban Anda di sini..."></textarea>
+      <p>Mengapa browser di Android tidak dapat mencegah gestur sistem seperti <em>swipe home</em> atau <em>recent apps</em>?</p>
+      <textarea style="width: 100%; height: 110px; padding: 12px; user-select: text; -webkit-user-select: text;" placeholder="Ketik jawaban Anda..."></textarea>
     </div>
   </main>
 
   <script>
     const CONFIG = {
-      maxStrikes: 3
+      maxStrikes: 3,
+      dedupeWindowMs: 1200 // Mencegah 1 aksi (misal minimize) dihitung 2x oleh blur + visibilitychange
     };
 
     let state = {
       isExamActive: false,
       strikes: 0,
+      lastViolationAt: 0,
+      isAndroid: /Android/i.test(navigator.userAgent),
       isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     };
 
@@ -142,43 +148,32 @@
     const strikeCounterText = document.getElementById('strikeCounterText');
     const headerStrike = document.getElementById('headerStrike');
 
-    /**
-     * 1. FUNGSI FULLSCREEN SINCRONOUS + KEYBOARD LOCK (KHUSUS WINDOWS CHROME/EDGE)
-     * Penting: Jangan gunakan 'await' sebelum memanggil requestFullscreen() agar tidak kehilangan izin klik user!
-     */
-    function triggerStrictFullscreen() {
+    function triggerFullscreen() {
       const elem = document.documentElement;
-
-      // Jalankan requestFullscreen secara langsung dalam event klik
-      const fsPromise = elem.requestFullscreen
-        ? elem.requestFullscreen({ navigationUI: "hide" })
-        : elem.webkitRequestFullscreen
-          ? elem.webkitRequestFullscreen()
-          : elem.msRequestFullscreen
-            ? elem.msRequestFullscreen()
-            : null;
-
-      if (fsPromise && typeof fsPromise.then === 'function') {
-        fsPromise.then(() => {
-          // FITUR RAHASIA CHROMIUM (Chrome/Edge di Windows):
-          // Mengunci tombol ESC agar tidak keluar dari fullscreen dengan sekali tekan!
-          if (navigator.keyboard && navigator.keyboard.lock) {
-            navigator.keyboard.lock(['Escape', 'F11']).catch((err) => {
-              console.warn("Keyboard lock tidak didukung di browser ini:", err);
-            });
-          }
-        }).catch((err) => {
-          alert("Gagal masuk mode layar penuh! Pastikan Anda membuka halaman ini langsung di tab browser (bukan di dalam iframe/preview) dan izinkan mode layar penuh.");
-          console.error(err);
-        });
+      const req = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
+      if (req) {
+        const res = req.call(elem, { navigationUI: "hide" });
+        if (res && typeof res.catch === 'function') {
+          res.catch(() => {});
+        }
+      }
+      if (navigator.keyboard && navigator.keyboard.lock) {
+        navigator.keyboard.lock(['Escape', 'F11']).catch(() => {});
       }
     }
 
-    /**
-     * 2. PENCATAT PELANGGARAN
-     */
-    function registerViolation(reason) {
+    function recordViolation(reason) {
       if (!state.isExamActive) return;
+
+      const now = Date.now();
+      if (now - state.lastViolationAt < CONFIG.dedupeWindowMs) {
+        // Tetap pastikan overlay tampil jika belum tampil
+        if (state.strikes < CONFIG.maxStrikes) {
+          warningOverlay.classList.remove('hidden');
+        }
+        return;
+      }
+      state.lastViolationAt = now;
 
       state.strikes++;
       headerStrike.textContent = `Pelanggaran: ${state.strikes} / ${CONFIG.maxStrikes}`;
@@ -191,81 +186,70 @@
         }
         document.getElementById('examContainer').innerHTML = `
           <div class="card" style="text-align:center; border-color:#dc2626;">
-            <h2 style="color:#dc2626;">Ujian Dibatalkan / Otomatis Dikumpulkan</h2>
-            <p>Anda telah melampaui batas maksimal pelanggaran (${CONFIG.maxStrikes}x).</p>
+            <h2 style="color:#dc2626;">Ujian Otomatis Diakhiri</h2>
+            <p>Batas maksimal pelanggaran (${CONFIG.maxStrikes}x) tercapai.</p>
             <p>Pelanggaran terakhir: <strong>${reason}</strong></p>
           </div>
         `;
       } else {
-        // Langsung tutup layar soal dengan overlay peringatan
         warningReason.textContent = reason;
         strikeCounterText.textContent = `Peringatan ke-${state.strikes} dari ${CONFIG.maxStrikes}.`;
         warningOverlay.classList.remove('hidden');
       }
     }
 
-    /**
-     * 3. LISTENER DETEKSI KELUAR FULLSCREEN & TOMBOL ESC
-     */
-    function initSecurityListeners() {
-      // A. Deteksi tepat saat user keluar dari Fullscreen (baik lewat tombol ESC, F11, atau geser mouse ke atas)
-      const onFullscreenChange = () => {
-        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-        if (!isFullscreen && state.isExamActive && !state.isIOS) {
-          registerViolation("Anda keluar dari mode layar penuh (menekan tombol ESC / F11).");
+    function setupListeners() {
+      // 1. Keluar dari Fullscreen (Android & Windows)
+      const onFsChange = () => {
+        const activeFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+        if (!activeFs && state.isExamActive && !state.isIOS) {
+          recordViolation("Keluar dari mode layar penuh.");
         }
       };
+      document.addEventListener('fullscreenchange', onFsChange);
+      document.addEventListener('webkitfullscreenchange', onFsChange);
 
-      document.addEventListener('fullscreenchange', onFullscreenChange);
-      document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-      document.addEventListener('msfullscreenchange', onFullscreenChange);
-
-      // B. Tangkap tombol ESC & F11 pada level keydown
-      document.addEventListener('keydown', (e) => {
-        if (!state.isExamActive) return;
-
-        if (e.key === 'Escape' || e.key === 'Esc' || e.key === 'F11') {
-          e.preventDefault();
-          e.stopPropagation();
-          // Jika browser tetap memaksa keluar fullscreen, event 'fullscreenchange' di atas akan langsung memblokir layar
-        }
-
-        // Blokir Alt+Tab / Kehilangan Fokus
-        if (e.altKey || e.key === 'Meta' || e.key === 'F12') {
-          e.preventDefault();
-        }
-      }, true); // Gunakan 'true' (Capture Phase) agar dieksekusi paling awal sebelum event browser
-
-      // C. Deteksi pindah tab / Alt+Tab di Windows
+      // 2. Pindah tab / minimize / buka aplikasi lain / kunci layar
       document.addEventListener('visibilitychange', () => {
         if (document.hidden && state.isExamActive) {
-          registerViolation("Anda berpindah tab atau meminimalkan jendela browser.");
+          recordViolation("Halaman tidak terlihat (pindah tab, minimize, atau buka aplikasi lain).");
         }
       });
 
+      // 3. Kehilangan fokus jendela (sering muncul di Android saat buka Recent Apps / switcher)
       window.addEventListener('blur', () => {
-        if (state.isExamActive) {
+        if (!state.isExamActive) return;
+        // Pada Android, langsung kunci layar soal agar tidak bisa diintip saat switcher terbuka
+        if (state.isAndroid) {
+          recordViolation("Aplikasi kehilangan fokus di Android (terdeteksi pindah layar/switcher).");
+        } else {
           setTimeout(() => {
             if (!document.hasFocus() && state.isExamActive) {
-              registerViolation("Jendela browser kehilangan fokus (Alt+Tab atau klik aplikasi lain).");
+              recordViolation("Jendela browser kehilangan fokus.");
             }
-          }, 400);
+          }, 300);
         }
+      });
+
+      // 4. Tombol / gestur Back di Android & browser
+      history.pushState({ examLock: true }, '', location.href);
+      window.addEventListener('popstate', () => {
+        if (!state.isExamActive) return;
+        history.pushState({ examLock: true }, '', location.href);
+        recordViolation("Tombol atau gestur Kembali (Back) ditekan.");
       });
     }
 
-    // Event Tombol Mulai
     document.getElementById('btnStartExam').addEventListener('click', () => {
-      triggerStrictFullscreen();
+      triggerFullscreen();
       startOverlay.classList.add('hidden');
       state.isExamActive = true;
-      initSecurityListeners();
+      setupListeners();
     });
 
-    // Event Tombol Kembali ke Ujian setelah pelanggaran
     document.getElementById('btnResumeExam').addEventListener('click', () => {
       warningOverlay.classList.add('hidden');
-      triggerStrictFullscreen(); // Paksa masuk layar penuh lagi!
+      triggerFullscreen();
     });
   </script>
 </body>
