@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CBT Anti-Cheat - Iframe & Tombol Keluar</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+
+    /* Layout utama penuh layar: Header di atas, Iframe mengisi sisa tinggi */
+    .exam-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100dvh;
+      background: #f8fafc;
+    }
+
+    :fullscreen .exam-shell {
+      width: 100vw;
+      height: 100dvh;
+    }
+
+    .exam-header {
+      flex: 0 0 auto;
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .exam-title {
+      font-weight: 700;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .badge-strike {
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 6px 12px;
+      border-radius: 99px;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    .btn-exit {
+      background: #fff1f2;
+      color: #be123c;
+      border: 1px solid #fda4af;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .btn-exit:hover {
+      background: #ffe4e6;
+    }
+
+    /* Area Iframe Ujian */
+    .iframe-wrapper {
+      position: relative;
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+    }
+
+    #examIframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    /* Overlay Mulai & Peringatan */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: #0f172a;
+      color: #fff;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .hidden { display: none !important; }
+
+    .btn {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-danger { background: #dc2626; color: white; }
+
+    .summary-box {
+      max-width: 480px;
+      background: #1e293b;
+      padding: 28px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LAYAR AWAL -->
+  <div id="startOverlay" class="overlay">
+    <div style="max-width: 480px;">
+      <h2>Mode Ujian Terproteksi</h2>
+      <p style="color: #cbd5e1; line-height: 1.6;">
+        Saat dimulai, browser akan masuk ke mode layar penuh dan memuat halaman ujian di dalam <strong>iframe</strong>. Maksimal pelanggaran: <strong>3 kali</strong>.
+      </p>
+      <button id="btnStartExam" class="btn btn-primary">Masuk Layar Penuh & Mulai Ujian</button>
+    </div>
+  </div>
+
+  <!-- LAYAR PERINGATAN PELANGGARAN -->
+  <div id="warningOverlay" class="overlay hidden">
+    <div style="max-width: 460px; background: #1e293b; padding: 28px; border-radius: 12px; border: 2px solid #dc2626;">
+      <h2 style="color: #f87171; margin-top: 0;">⚠️ Pelanggaran Terdeteksi!</h2>
+      <p id="warningReason" style="color: #e2e8f0; line-height: 1.6;"></p>
+      <p id="strikeCounterText" style="color: #fbbf24; font-weight: bold; font-size: 1.1rem;"></p>
+      <button id="btnResumeExam" class="btn btn-danger">Kembali ke Layar Penuh</button>
+    </div>
+  </div>
+
+  <!-- LAYAR RINGKASAN SETELAH KELUAR / SELESAI -->
+  <div id="endOverlay" class="overlay hidden">
+    <div class="summary-box">
+      <h2 id="endTitle" style="margin-top: 0;">Sesi Ujian Berakhir</h2>
+      <p id="endMessage" style="color: #cbd5e1; line-height: 1.6;"></p>
+      <p id="endStrikes" style="color: #fbbf24; font-weight: 600;"></p>
+      <button id="btnReopenStart" class="btn btn-primary">Kembali ke Halaman Awal</button>
+    </div>
+  </div>
+
+  <!-- SHELL UJIAN + IFRAME -->
+  <div class="exam-shell">
+    <header class="exam-header">
+      <div class="header-left">
+        <span class="exam-title">Ujian CBT Terproteksi</span>
+      </div>
+      <div class="header-right">
+        <span class="badge-strike" id="headerStrike">Pelanggaran: 0 / 3</span>
+        <button type="button" id="btnExitExam" class="btn-exit">Keluar Ujian</button>
+      </div>
+    </header>
+
+    <div class="iframe-wrapper">
+      <iframe
+        id="examIframe"
+        src="about:blank"
+        allowfullscreen
+        webkitallowfullscreen
+        mozallowfullscreen
+        allow="fullscreen; camera; microphone"
+        referrerpolicy="strict-origin-when-cross-origin"
+      ></iframe>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      // Ganti dengan URL halaman ujian Anda (contoh: "https://ujian.sekolah.sch.id/soal/1" atau "soal.html")
+      examUrl: "https://example.com",
+      maxStrikes: 3,
+      dedupeWindowMs: 2000,
+      resumeGracePeriodMs: 2500
+    };
+
+    let state = {
+      isExamActive: false,
+      isWarningOpen: false,
+      strikes: 0,
+      lastViolationAt: 0,
+      graceUntil: 0,
+      listenersAttached: false,
+      isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    };
+
+    const startOverlay = document.getElementById('startOverlay');
+    const warningOverlay = document.getElementById('warningOverlay');
+    const endOverlay = document.getElementById('endOverlay');
+    const warningReason = document.getElementById('warningReason');
+    const strikeCounterText = document.getElementById('strikeCounterText');
+    const headerStrike = document.getElementById('headerStrike');
+    const examIframe = document.getElementById('examIframe');
+
+    function isCurrentlyFullscreen() {
+      return !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+    }
+
+    function triggerFullscreen() {
+      const elem = document.documentElement;
+      const req =
+        elem.requestFullscreen ||
+        elem.webkitRequestFullscreen ||
+        elem.mozRequestFullScreen ||
+        elem.msRequestFullscreen;
+
+      if (req) {
+        try {
+          const res = req.call(elem, { navigationUI: "hide" });
+          if (res && typeof res.catch === 'function') {
+            res.catch(() => {});
+          }
+        } catch (_) {}
+      }
+
+      if (navigator.keyboard && navigator.keyboard.lock) {
+        navigator.keyboard.lock(['Escape', 'F11']).catch(() => {});
+      }
+    }
+
+    function exitFullscreenSafe() {
+      if (!isCurrentlyFullscreen()) return;
+      const exitFn =
+        document.exitFullscreen ||
+        document.webkitExitFullscreen ||
+        document.mozCancelFullScreen ||
+        document.msExitFullscreen;
+
+      if (exitFn) {
+        try {
+          const res = exitFn.call(document);
+          if (res && typeof res.catch === 'function') {
+            res.catch(() => {});
+          }
+        } catch (_) {}
+      }
+    }
+
+    function finishExam(title, message) {
+      // Matikan status aktif terlebih dahulu agar exitFullscreenSafe() tidak memicu pelanggaran
+      state.isExamActive = false;
+      state.isWarningOpen = false;
+      warningOverlay.classList.add('hidden');
+
+      // Kosongkan iframe agar soal tidak terlihat setelah keluar
+      examIframe.src = "about:blank";
+
+      if (navigator.keyboard && navigator.keyboard.unlock) {
+        try { navigator.keyboard.unlock(); } catch (_) {}
+      }
+
+      exitFullscreenSafe();
+
+      document.getElementById('endTitle').textContent = title;
+      document.getElementById('endMessage').textContent = message;
+      document.getElementById('endStrikes').textContent = `Total Pelanggaran: ${state.strikes} dari ${CONFIG.maxStrikes}`;
+      endOverlay.classList.remove('hidden');
+    }
+
+    function recordViolation(reason) {
+      if (!state.isExamActive) return;
+
+      const now = Date.now();
+      if (state.isWarningOpen || now < state.graceUntil) {
+        return;
+      }
+
+      if (now - state.lastViolationAt < CONFIG.dedupeWindowMs) {
+        return;
+      }
+
+      state.lastViolationAt = now;
+      state.strikes += 1;
+      headerStrike.textContent = `Pelanggaran: ${state.strikes} / ${CONFIG.maxStrikes}`;
+
+      if (state.strikes >= CONFIG.maxStrikes) {
+        finishExam(
+          "Ujian Otomatis Diakhiri",
+          `Batas maksimal pelanggaran (${CONFIG.maxStrikes}x) tercapai. Pelanggaran terakhir: ${reason}`
+        );
+      } else {
+        state.isWarningOpen = true;
+        warningReason.textContent = reason;
+        strikeCounterText.textContent = `Peringatan ke-${state.strikes} dari ${CONFIG.maxStrikes}.`;
+        warningOverlay.classList.remove('hidden');
+      }
+    }
+
+    function setupListeners() {
+      if (state.listenersAttached) return;
+      state.listenersAttached = true;
+
+      const onFsChange = () => {
+        if (!isCurrentlyFullscreen() && state.isExamActive && !state.isIOS) {
+          recordViolation("Keluar dari mode layar penuh.");
+        }
+      };
+
+      document.addEventListener('fullscreenchange', onFsChange);
+      document.addEventListener('webkitfullscreenchange', onFsChange);
+      document.addEventListener('mozfullscreenchange', onFsChange);
+      document.addEventListener('msfullscreenchange', onFsChange);
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && state.isExamActive) {
+          recordViolation("Halaman ujian tidak terlihat (pindah tab atau aplikasi lain).");
+        }
+      });
+
+      window.addEventListener('blur', () => {
+        if (!state.isExamActive || document.hidden) return;
+        // Jika fokus berpindah ke dalam iframe ujian, jangan hitung sebagai pelanggaran
+        if (document.activeElement === examIframe) return;
+
+        setTimeout(() => {
+          if (
+            state.isExamActive &&
+            !document.hidden &&
+            !document.hasFocus() &&
+            document.activeElement !== examIframe
+          ) {
+            recordViolation("Jendela browser kehilangan fokus.");
+          }
+        }, 250);
+      });
+
+      history.pushState({ examLock: true }, '', location.href);
+      window.addEventListener('popstate', () => {
+        if (!state.isExamActive) return;
+        history.pushState({ examLock: true }, '', location.href);
+        recordViolation("Tombol atau gestur Kembali (Back) ditekan.");
+      });
+    }
+
+    document.getElementById('btnStartExam').addEventListener('click', () => {
+      state.strikes = 0;
+      state.lastViolationAt = 0;
+      headerStrike.textContent = `Pelanggaran: 0 / ${CONFIG.maxStrikes}`;
+
+      // Muat URL ujian ke iframe
+      examIframe.src = CONFIG.examUrl;
+
+      triggerFullscreen();
+      startOverlay.classList.add('hidden');
+      endOverlay.classList.add('hidden');
+      state.isExamActive = true;
+      state.graceUntil = Date.now() + 1200;
+      setupListeners();
+    });
+
+    document.getElementById('btnResumeExam').addEventListener('click', () => {
+      state.isWarningOpen = false;
+      state.graceUntil = Date.now() + CONFIG.resumeGracePeriodMs;
+      warningOverlay.classList.add('hidden');
+      triggerFullscreen();
+    });
+
+    document.getElementById('btnExitExam').addEventListener('click', () => {
+      if (!state.isExamActive) return;
+      const yakin = confirm("Apakah Anda yakin ingin keluar dari sesi ujian sekarang?");
+      if (yakin) {
+        finishExam(
+          "Keluar dari Ujian",
+          "Anda telah keluar dari sesi ujian melalui tombol Keluar Ujian."
+        );
+      }
+    });
+
+    document.getElementById('btnReopenStart').addEventListener('click', () => {
+      endOverlay.classList.add('hidden');
+      startOverlay.classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>
